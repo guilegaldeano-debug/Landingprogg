@@ -37,8 +37,10 @@ const DEFAULT_LISTS = [
 
 const LIST_PALETTE = ["#3b82f6", "#a78bfa", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"];
 
-const PRIORITY_COLOR = ["#233457", "#3b82f6", "#f59e0b", "#ef4444"];
+const PRIORITY_COLOR = ["var(--line2)", "var(--accent)", "var(--warn)", "var(--bad)"];
 const PRIORITY_LABEL = ["Sem prioridade", "Baixa", "Média", "Alta"];
+
+const DAY_CAPACITY = 8 * 60; // referencia da barra de carga: 8h por dia
 
 const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
@@ -54,7 +56,7 @@ function TaskCard({ task, dateKey, list, onToggle, onOpen, onDragStart, onDragEn
   return (
     <div
       className={`task${done ? " done" : ""}${dragging ? " dragging" : ""}`}
-      style={{ borderLeftColor: task.priority ? PRIORITY_COLOR[task.priority] : list?.color || "#233457" }}
+      style={{ borderLeftColor: list?.color ?? "var(--line2)" }}
       draggable
       onDragStart={(e) => onDragStart(e, task)}
       onDragEnd={onDragEnd}
@@ -68,7 +70,10 @@ function TaskCard({ task, dateKey, list, onToggle, onOpen, onDragStart, onDragEn
         {done ? "✓" : ""}
       </button>
       <div className="mid">
-        <div className="t">{task.title}</div>
+        <div className="t">
+          {task.priority > 0 && <i className={`pri p${task.priority}`} title={PRIORITY_LABEL[task.priority]} />}
+          {task.title}
+        </div>
         <div className="meta">
           {task.time && (
             <span className="time">
@@ -77,9 +82,8 @@ function TaskCard({ task, dateKey, list, onToggle, onOpen, onDragStart, onDragEn
             </span>
           )}
           {!task.time && task.duration ? <span>{formatDuration(task.duration)}</span> : null}
-          {task.repeat && <span title={`Repete: ${describeRepeat(task.repeat)}`}>↻</span>}
+          {task.repeat && <span className="rep" title={`Repete: ${describeRepeat(task.repeat)}`}>↻</span>}
           {overdue && <span className="late">atrasada</span>}
-          {list && <span className="dot" style={{ background: list.color, opacity: 0.85 }} />}
           {task.notes && <span title={task.notes}>≡</span>}
         </div>
       </div>
@@ -99,14 +103,14 @@ function QuickAdd({ inputRef, value, onChange, onSubmit, preview, lists }) {
   return (
     <div className={`qa${focused ? " focus" : ""}`}>
       <div className="row">
-        <span style={{ color: "var(--dim)", fontSize: 15 }}>+</span>
+        <span className="plus">+</span>
         <input
           ref={inputRef}
           value={value}
           placeholder="O que precisa ser feito?"
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => setTimeout(() => setFocused(false), 120)}
           onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }}
         />
         <button className="addbtn" disabled={!has} onClick={onSubmit}>Adicionar</button>
@@ -131,10 +135,10 @@ function QuickAdd({ inputRef, value, onChange, onSubmit, preview, lists }) {
         </div>
       )}
 
-      {!has && (
+      {!has && focused && (
         <div className="hint">
-          <b style={{ color: "var(--muted)", fontWeight: 400 }}>ex: reunião amanhã às 14h30 por 1h !! #trabalho</b><br />
-          Escreve em português normal: <code>amanhã</code> <code>sexta 15h</code> <code>dia 15</code> <code>23/10</code>{" "}
+          <span className="ex">ex: reunião amanhã às 14h30 por 1h !! #trabalho</span><br />
+          <code>amanhã</code> <code>sexta 15h</code> <code>dia 15</code> <code>23/10</code>{" "}
           <code>toda segunda e quarta</code> <code>dias úteis</code> <code>todo mês</code> <code>por 45min</code>{" "}
           <code>!!</code> prioridade · <code>#lista</code>
         </div>
@@ -155,6 +159,8 @@ function WeekView({ days, tasks, lists, showDone, drag, ...h }) {
         const all = tasksForDay(tasks, key);
         const items = showDone ? all : all.filter((x) => !isDone(x, key));
         const doneCount = all.filter((x) => isDone(x, key)).length;
+        // Carga = minutos ainda por fazer no dia. Responde "esse dia cabe mais alguma coisa?"
+        const load = all.reduce((sum, x) => sum + (isDone(x, key) ? 0 : x.duration ?? 0), 0);
         return (
           <div
             key={key}
@@ -170,9 +176,17 @@ function WeekView({ days, tasks, lists, showDone, drag, ...h }) {
             onDrop={(e) => { e.preventDefault(); h.onDrop(key); }}
           >
             <div className="colhead">
-              <span className="dw">{DOW_SHORT[dowOf(key)]}</span>
-              <span className="dn">{fromKey(key).getDate()}</span>
-              <span className="n">{all.length ? `${doneCount}/${all.length}` : ""}</span>
+              <div className="line1">
+                <span className="dw">{DOW_SHORT[dowOf(key)]}</span>
+                <span className="dn">{fromKey(key).getDate()}</span>
+                <span className="n">{all.length ? `${doneCount}/${all.length}` : ""}</span>
+              </div>
+              {load > 0 && (
+                <div className="load" title={`${formatDuration(load)} planejados neste dia`}>
+                  <i className={load >= DAY_CAPACITY ? "full" : ""}
+                     style={{ width: `${Math.min(100, (load / DAY_CAPACITY) * 100)}%` }} />
+                </div>
+              )}
             </div>
             {items.length === 0 ? (
               <div className="empty">—</div>
@@ -280,7 +294,7 @@ function ListView({ groups, lists, drag, ...h }) {
             <div className="grouphead">
               <span style={g.color ? { color: g.color } : undefined}>{g.label}</span>
               <span className="line" />
-              <span>{g.items.length}</span>
+              <span className="n">{g.items.length}</span>
             </div>
             <div className="stack">
               {g.items.map(({ task, dateKey }) => (
@@ -355,9 +369,8 @@ function TaskModal({ task, lists, onSave, onDelete, onSkip, onClose }) {
           <label>Prioridade</label>
           <div className="pick">
             {PRIORITY_LABEL.map((lbl, i) => (
-              <button key={i} className={draft.priority === i ? "on" : ""} onClick={() => set({ priority: i })}
-                style={draft.priority === i ? { borderColor: PRIORITY_COLOR[i], background: PRIORITY_COLOR[i] + "26" } : undefined}>
-                {i === 0 ? "—" : "!".repeat(i)} {lbl}
+              <button key={i} className={draft.priority === i ? "on" : ""} onClick={() => set({ priority: i })}>
+                {i > 0 && <i className={`pri p${i}`} />}{lbl}
               </button>
             ))}
           </div>
@@ -479,7 +492,7 @@ function FocusTimer({ state, setState, taskTitle }) {
       <div className="clock">{mm}:{ss}</div>
       <div className="task-name">{taskTitle || "sem tarefa selecionada"}</div>
       <div className="btns">
-        <button className="pri" onClick={() => setState((s) => ({ ...s, running: !s.running }))}>
+        <button className="pri-btn" onClick={() => setState((s) => ({ ...s, running: !s.running }))}>
           {state.running ? "Pausar" : "Iniciar"}
         </button>
         <button onClick={() => setState((s) => ({ ...s, running: false, left: s.mode === "work" ? WORK_SECS : BREAK_SECS }))}>
@@ -510,6 +523,13 @@ export default function Organizer() {
   const [dragId, setDragId] = useState(null);
   const [dragOver, setDragOver] = useState(null);
   const [focus, setFocus] = useState({ open: false, running: false, mode: "work", left: WORK_SECS, rounds: 0, taskId: null });
+
+  const theme = prefs.theme ?? "dark";
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", theme === "dark" ? "#0a0e17" : "#f5f7fb");
+  }, [theme]);
 
   const inputRef = useRef(null);
   const undoRef = useRef(null);
@@ -762,6 +782,7 @@ export default function Organizer() {
       else if (e.key === "2") setView("semana");
       else if (e.key === "3") setView("proximos");
       else if (e.key === "f") setFocus((s) => ({ ...s, open: !s.open }));
+      else if (e.key === "d") setPrefs((p) => ({ ...p, theme: (p.theme ?? "dark") === "dark" ? "light" : "dark" }));
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -839,10 +860,16 @@ export default function Organizer() {
         {/* ---------- sidebar ---------- */}
         <aside className="side">
           <div className="brand">
-            <div className="mark">S7</div>
+            <div className="mark">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                <rect x="1" y="3" width="3" height="9" rx="1.2" fill="currentColor" opacity=".55" />
+                <rect x="6" y="1" width="3" height="13" rx="1.2" fill="currentColor" />
+                <rect x="11" y="5" width="3" height="6" rx="1.2" fill="currentColor" opacity=".55" />
+              </svg>
+            </div>
             <div>
               <b>Semana</b>
-              <span>ORGANIZADOR</span>
+              <span>{labelDate(todayKey())} · {DOW_LONG[dowOf(todayKey())]}</span>
             </div>
           </div>
 
@@ -858,16 +885,16 @@ export default function Organizer() {
               ].map(([id, label, icon, count]) => (
                 <button key={id} className={`navbtn${view === id ? " on" : ""}`}
                   onClick={() => { setView(id); if (id === "hoje") setAnchor(todayKey()); }}>
-                  <span style={{ width: 14, textAlign: "center" }}>{icon}</span>
+                  <span className="ico">{icon}</span>
                   {label}
                   {count ? <span className="cnt">{count}</span> : null}
                 </button>
               ))}
               {counts.overdue > 0 && (
-                <button className="navbtn" onClick={() => setView("proximos")} style={{ color: "#fca5a5" }}>
-                  <span style={{ width: 14, textAlign: "center" }}>!</span>
+                <button className="navbtn" onClick={() => setView("proximos")} style={{ color: "var(--bad)" }}>
+                  <span className="ico" style={{ color: "var(--bad)" }}>!</span>
                   Atrasadas
-                  <span className="cnt" style={{ color: "#fca5a5" }}>{counts.overdue}</span>
+                  <span className="cnt" style={{ color: "var(--bad)" }}>{counts.overdue}</span>
                 </button>
               )}
             </div>
@@ -889,29 +916,42 @@ export default function Organizer() {
                 </button>
               ))}
               <button className="navbtn" onClick={addList} style={{ color: "var(--dim)" }}>
-                <span style={{ width: 14, textAlign: "center" }}>+</span> Nova lista
+                <span className="ico">+</span> Nova lista
               </button>
             </div>
           </div>
 
           <div className="foot">
-            <div className="lbl" style={{ fontSize: 10, color: "var(--dim)", lineHeight: 1.7 }}>
-              🔥 {streak} dia{streak === 1 ? "" : "s"} seguidos<br />
-              {counts.backlog} sem data
+            <div className="streak">
+              <div>
+                <b>{streak}</b>
+                <span>{streak === 1 ? "dia seguido" : "dias seguidos"}</span>
+              </div>
+              <div>
+                <b>{counts.backlog}</b>
+                <span>sem data</span>
+              </div>
             </div>
-            <button className="ghost" onClick={() => setPrefs((p) => ({ ...p, showDone: !p.showDone }))}>
-              {prefs.showDone ? "Ocultar concluídas" : "Mostrar concluídas"}
-            </button>
-            <button className="ghost" onClick={exportJSON}>Exportar JSON</button>
-            <button className="ghost" onClick={() => fileRef.current?.click()}>Importar JSON</button>
+
+            <div className="toolrow">
+              <button className="tool" title={theme === "dark" ? "Tema claro" : "Tema escuro"}
+                onClick={() => setPrefs((p) => ({ ...p, theme: theme === "dark" ? "light" : "dark" }))}>
+                {theme === "dark" ? "☀" : "☾"}
+              </button>
+              <button className={`tool${prefs.showDone ? " on" : ""}`}
+                title={prefs.showDone ? "Ocultar concluídas" : "Mostrar concluídas"}
+                onClick={() => setPrefs((p) => ({ ...p, showDone: !p.showDone }))}>✓</button>
+              <button className="tool" title="Exportar JSON" onClick={exportJSON}>↓</button>
+              <button className="tool" title="Importar JSON" onClick={() => fileRef.current?.click()}>↑</button>
+              {"Notification" in window && Notification.permission === "default" && (
+                <button className="tool" title="Ativar lembretes (só com a aba aberta)"
+                  onClick={() => Notification.requestPermission()}>◔</button>
+              )}
+            </div>
             <input ref={fileRef} type="file" accept="application/json" style={{ display: "none" }}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) importJSON(f); e.target.value = ""; }} />
-            {"Notification" in window && Notification.permission === "default" && (
-              <button className="ghost" onClick={() => Notification.requestPermission()}>Ativar lembretes</button>
-            )}
-            <div style={{ fontSize: 9, color: "var(--dim)", lineHeight: 1.6 }}>
-              Dados só neste navegador. Lembretes só com a aba aberta.
-            </div>
+
+            <div className="note">Dados só neste navegador.<br />Lembretes só com a aba aberta.</div>
           </div>
         </aside>
 
@@ -931,8 +971,8 @@ export default function Organizer() {
               <div className="nav">
                 <button className="icobtn" title="Anterior"
                   onClick={() => setAnchor(addDaysKey(anchor, view === "semana" ? -7 : -1))}>‹</button>
-                <button className="icobtn" title="Hoje" style={{ width: "auto", padding: "0 11px", fontSize: 11 }}
-                  onClick={() => setAnchor(todayKey())}>hoje</button>
+                <button className="icobtn txt" title="Voltar para hoje"
+                  onClick={() => setAnchor(todayKey())}>Hoje</button>
                 <button className="icobtn" title="Próximo"
                   onClick={() => setAnchor(addDaysKey(anchor, view === "semana" ? 7 : 1))}>›</button>
               </div>
@@ -946,7 +986,7 @@ export default function Organizer() {
 
             <div className="spacer" />
 
-            <input className="inp" style={{ width: 170 }} placeholder="Buscar…" value={query}
+            <input className="search" placeholder="Buscar…" value={query}
               onChange={(e) => setQuery(e.target.value)} />
 
             {view === "semana" && (

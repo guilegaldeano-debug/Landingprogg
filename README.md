@@ -32,7 +32,16 @@ Sem data → cai no painel **Sem data**, e você arrasta pro dia que quiser.
 ## Atalhos
 
 `n` ou `/` foca a entrada · `←` `→` navega · `h` volta pra hoje ·
-`1` dia, `2` semana, `3` lista · `f` timer de foco · `Esc` fecha o modal.
+`1` dia, `2` semana, `3` lista · `f` timer de foco · `d` alterna tema ·
+`Esc` fecha o modal.
+
+## Leitura visual
+
+- **Borda esquerda colorida** do cartão = a lista à qual a tarefa pertence.
+- **Ponto colorido** antes do título = prioridade (azul, âmbar, vermelho).
+- **Barra fina** sob o número do dia = carga já comprometida, sobre uma
+  referência de 8h. Ela responde "esse dia ainda cabe alguma coisa?".
+- Tema claro e escuro; segue o sistema na primeira visita.
 
 ## Recorrência
 
@@ -61,7 +70,7 @@ src/Organizer.jsx      UI (views, modal, timer)
 src/organizer/dates.js      helpers de data (chave "YYYY-MM-DD")
 src/organizer/parse.js      parser pt-BR da entrada rápida
 src/organizer/recurrence.js expansão das séries
-src/organizer/styles.js     CSS
+src/organizer/styles.js     CSS e tokens dos dois temas
 ```
 
 Build padrão do Vite; o `netlify.toml` só publica `dist/`. Não há backend:
