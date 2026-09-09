@@ -37,11 +37,23 @@ Sem data → cai no painel **Sem data**, e você arrasta pro dia que quiser.
 
 ## Leitura visual
 
-- **Borda esquerda colorida** do cartão = a lista à qual a tarefa pertence.
-- **Ponto colorido** antes do título = prioridade (azul, âmbar, vermelho).
-- **Barra fina** sob o número do dia = carga já comprometida, sobre uma
-  referência de 8h. Ela responde "esse dia ainda cabe alguma coisa?".
-- Tema claro e escuro; segue o sistema na primeira visita.
+A interface segue a linguagem do macOS: separação por material e espaço em
+vez de contorno, cor só no que é interativo, fonte do sistema (SF Pro no
+Mac — nenhuma fonte é baixada da web).
+
+- **Compromisso** (tem hora) aparece como bloco de calendário, tintado com a
+  cor da lista. **Tarefa** (sem hora) aparece como linha de lista com círculo.
+  É a distinção entre Calendar e Reminders, e ela vale: uma ocupa um horário,
+  a outra só precisa acontecer no dia.
+- **`!` `!!` `!!!`** em vermelho antes do título = prioridade.
+- **Número do dia em círculo azul** = hoje.
+- **Texto à direita no cabeçalho do dia** ("3h15") = quanto já está
+  comprometido, para responder "esse dia ainda cabe alguma coisa?".
+- Tema claro e escuro; segue o sistema na primeira visita, atalho `d`.
+
+O texto dos blocos é colorido na mesma matiz da lista — clara no tema
+escuro, escura no claro. Sem isso, laranja diluído sobre cinza escuro lê
+como marrom. Todas as combinações foram medidas em WCAG AA.
 
 ## Recorrência
 
@@ -71,6 +83,7 @@ src/organizer/dates.js      helpers de data (chave "YYYY-MM-DD")
 src/organizer/parse.js      parser pt-BR da entrada rápida
 src/organizer/recurrence.js expansão das séries
 src/organizer/styles.js     CSS e tokens dos dois temas
+src/organizer/icons.jsx     ícones de traço (sem dependência externa)
 ```
 
 Build padrão do Vite; o `netlify.toml` só publica `dist/`. Não há backend:
