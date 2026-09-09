@@ -1,7 +1,13 @@
-# Semana — organizador (`/agenda`)
+# Semana — organizador de semana e dia
 
-App separado dentro do mesmo deploy do LandingPro. Vive em `/agenda`
-(ou `/agenda.html`); o dashboard de vendas continua intocado em `/`.
+App de tarefas com foco em planejar a semana: captura rápida em português,
+recorrência, arrastar-e-soltar entre dias e timer de foco.
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # gera dist/
+```
 
 ## Como adicionar tarefa
 
@@ -49,8 +55,8 @@ A tarefa guarda a **regra**, não cópias. Por isso:
 ## Estrutura
 
 ```
-agenda.html            entrada da página
-src/agenda.jsx         bootstrap React
+index.html             entrada da página
+src/main.jsx           bootstrap React
 src/Organizer.jsx      UI (views, modal, timer)
 src/organizer/dates.js      helpers de data (chave "YYYY-MM-DD")
 src/organizer/parse.js      parser pt-BR da entrada rápida
@@ -58,5 +64,5 @@ src/organizer/recurrence.js expansão das séries
 src/organizer/styles.js     CSS
 ```
 
-`vite.config.js` tem duas entradas (`index.html` e `agenda.html`);
-`netlify.toml` redireciona `/agenda` → `/agenda.html`.
+Build padrão do Vite; o `netlify.toml` só publica `dist/`. Não há backend:
+o app é inteiramente estático.
