@@ -27,7 +27,24 @@ separa data, hora, duração, prioridade, recorrência e lista:
 | `revisar proposta !!!` ou `p1` | prioridade alta |
 | `estudar #estudos` | manda pra lista (cria se não existir) |
 
-Sem data → cai no painel **Sem data**, e você arrasta pro dia que quiser.
+### Em que dia a tarefa entra
+
+Quando a frase não diz a data, a tarefa entra no **dia mirado**, mostrado no
+canto direito do campo. O alvo acompanha o que você está olhando — o dia
+aberto na vista Dia, hoje na vista Semana — e você muda de três jeitos:
+
+- o seletor ao lado do campo (no celular abre o picker do sistema);
+- o **+** no cabeçalho de qualquer dia da semana;
+- clicando numa **hora vaga** na vista Dia, que mira o dia *e* a hora.
+
+O dia mirado fica destacado na grade. Escrever a data na frase sempre vence o
+seletor, e nesse caso ele mostra o que foi entendido, travado.
+
+Para deixar sem data, escolha **Sem data** no seletor — aí vai para o painel
+lateral e você arrasta pro dia depois.
+
+Depois de adicionar, o foco e o alvo continuam onde estavam, então dá para
+despejar várias tarefas no mesmo dia em sequência.
 
 ## Atalhos
 

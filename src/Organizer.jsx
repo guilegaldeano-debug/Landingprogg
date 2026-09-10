@@ -140,21 +140,33 @@ function TaskItem({ task, dateKey, list, theme, showList, onToggle, onOpen, onDr
 /* Campo de captura                                                    */
 /* ------------------------------------------------------------------ */
 
-function Composer({ inputRef, value, onChange, onSubmit, preview, lists }) {
+function Composer({ inputRef, value, onChange, onSubmit, preview, lists, target, onTarget, weekDays }) {
   const [focused, setFocused] = useState(false);
   const known = preview?.list ? lists.find((l) => norm(l.name) === norm(preview.list)) : null;
   const has = value.trim().length > 0;
 
-  // Leitura do que foi entendido, em texto corrido — nao em etiquetas coloridas.
+  // A data escrita na frase manda; o seletor só decide quando ela não diz nada.
+  const fromText = !!preview?.date;
+  const timeOn = preview?.time ?? target.time;
+
+  // Opções do seletor, em ordem: hoje, amanhã e o resto da semana visível.
+  // Dias já passados ficam de fora — quase nunca é o que se quer, e só
+  // atrapalham a lista. O alvo atual entra mesmo se for um deles.
+  const today = todayKey();
+  const options = [...new Set([
+    today,
+    addDaysKey(today, 1),
+    ...(weekDays ?? []).filter((k) => k >= today),
+    ...(target.date ? [target.date] : []),
+  ])].sort();
+
   const parts = [];
   if (preview) {
-    if (preview.date) parts.push(labelDate(preview.date));
-    if (preview.time) parts.push(preview.time);
+    if (timeOn) parts.push(timeOn);
     if (preview.duration) parts.push(formatDuration(preview.duration));
     if (preview.repeat) parts.push(`repete ${describeRepeat(preview.repeat)}`);
     if (preview.priority > 0) parts.push(`prioridade ${PRIORITY_LABEL[preview.priority].toLowerCase()}`);
     if (preview.list) parts.push(known ? known.name : `${preview.list} (lista nova)`);
-    if (!preview.date) parts.push("sem data");
   }
 
   return (
@@ -170,10 +182,29 @@ function Composer({ inputRef, value, onChange, onSubmit, preview, lists }) {
           onBlur={() => setTimeout(() => setFocused(false), 120)}
           onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }}
         />
+
+        <label className={`target${fromText ? " fromtext" : ""}`}
+          title={fromText ? "A data veio do que você escreveu" : "Em que dia entra"}>
+          <span>{fromText ? labelDate(preview.date) : labelDate(target.date)}</span>
+          {target.time && !fromText && <span className="at">{target.time}</span>}
+          {!fromText && (
+            <select
+              value={target.date ?? ""}
+              aria-label="Dia em que a tarefa entra"
+              onChange={(e) => onTarget({ date: e.target.value || null, time: null })}
+            >
+              <option value="">Sem data</option>
+              {options.map((key) => (
+                <option key={key} value={key}>{labelDate(key)}</option>
+              ))}
+            </select>
+          )}
+        </label>
+
         {has && <button className="addbtn" onClick={onSubmit}>Adicionar</button>}
       </div>
 
-      {has && preview && (
+      {has && preview && parts.length > 0 && (
         <div className="readout">
           <b>{preview.title || "sem título"}</b>
           {parts.map((p, i) => (
@@ -197,7 +228,7 @@ function Composer({ inputRef, value, onChange, onSubmit, preview, lists }) {
 /* Semana                                                              */
 /* ------------------------------------------------------------------ */
 
-function WeekView({ days, tasks, lists, showDone, theme, drag, ...h }) {
+function WeekView({ days, tasks, lists, showDone, theme, drag, target, onAim, ...h }) {
   const t = todayKey();
   return (
     <div className="weekgrid">
@@ -213,6 +244,7 @@ function WeekView({ days, tasks, lists, showDone, theme, drag, ...h }) {
               "daycol",
               key === t ? "today" : "", key < t ? "past" : "",
               drag.over === key ? "over" : "", items.length === 0 ? "vazio" : "",
+              target?.date === key ? "aimed" : "",
             ].join(" ").trim()}
             onDragOver={(e) => { e.preventDefault(); drag.setOver(key); }}
             onDragLeave={() => drag.over === key && drag.setOver(null)}
@@ -222,15 +254,28 @@ function WeekView({ days, tasks, lists, showDone, theme, drag, ...h }) {
               <span className="dw">{DOW_SHORT[dowOf(key)]}</span>
               <span className="dn">{fromKey(key).getDate()}</span>
               {load > 0 && <span className="hrs">{formatDuration(load)}</span>}
+              <button className="addhere" title={`Adicionar em ${labelDate(key)}`}
+                onClick={() => onAim(key)}>
+                <Icon name="plus" size={14} />
+              </button>
             </div>
             {items.length === 0
-              ? <div className="none">Livre</div>
+              ? (
+                  <button className="none free" onClick={() => onAim(key)}
+                    aria-label={`Adicionar em ${labelDate(key)}`}>
+                    Livre<span className="invite"> · adicionar</span>
+                  </button>
+                )
               : items.map((task) => (
                   <TaskItem key={task.id} task={task} dateKey={key} theme={theme}
                     list={lists.find((l) => l.id === task.listId)} dragging={drag.id === task.id}
                     onToggle={h.onToggle} onOpen={h.onOpen}
                     onDragStart={h.onDragStart} onDragEnd={h.onDragEnd} />
                 ))}
+            {items.length > 0 && (
+              <button className="restofday" aria-label={`Adicionar em ${labelDate(key)}`}
+                onClick={() => onAim(key)} />
+            )}
           </div>
         );
       })}
@@ -242,7 +287,7 @@ function WeekView({ days, tasks, lists, showDone, theme, drag, ...h }) {
 /* Dia                                                                 */
 /* ------------------------------------------------------------------ */
 
-function DayView({ dayKey, tasks, lists, showDone, theme, drag, ...h }) {
+function DayView({ dayKey, tasks, lists, showDone, theme, drag, onAim, ...h }) {
   const all = tasksForDay(tasks, dayKey);
   const visible = showDone ? all : all.filter((x) => !isDone(x, dayKey));
   const untimed = visible.filter((x) => !x.time);
@@ -261,7 +306,12 @@ function DayView({ dayKey, tasks, lists, showDone, theme, drag, ...h }) {
   return (
     <div className="dayview">
       <div className="alldaystrip">
-        <div className="lab">Sem horário</div>
+        <div className="lab">
+          Sem horário
+          <button className="addhere" title="Adicionar sem horário" onClick={() => onAim(dayKey, null)}>
+            <Icon name="plus" size={14} />
+          </button>
+        </div>
         {untimed.length === 0
           ? <div className="none" style={{ padding: "0 4px 2px", fontSize: 12.5, color: "var(--label3)" }}>Nada solto neste dia</div>
           : untimed.map((task) => (
@@ -285,6 +335,8 @@ function DayView({ dayKey, tasks, lists, showDone, theme, drag, ...h }) {
                 onDragOver={(e) => { e.preventDefault(); drag.setOver(slotKey); }}
                 onDragLeave={() => drag.over === slotKey && drag.setOver(null)}
                 onDrop={(e) => { e.preventDefault(); h.onDropTime(dayKey, `${pad(hour)}:00`); }}
+                onClick={(e) => { if (e.target === e.currentTarget) onAim(dayKey, `${pad(hour)}:00`); }}
+                title={inSlot.length === 0 ? `Adicionar às ${pad(hour)}:00` : undefined}
               >
                 {showNow && <div className="nowline" style={{ top: `${(now.getMinutes() / 60) * 100}%` }} />}
                 {inSlot.map((task) => (
@@ -549,6 +601,8 @@ export default function Organizer() {
   const [editing, setEditing] = useState(null);
   const [toast, setToast] = useState(null);
   const [dragId, setDragId] = useState(null);
+  // Onde a próxima tarefa entra quando a frase não diz a data.
+  const [target, setTarget] = useState({ date: todayKey(), time: null });
   const [dragOver, setDragOver] = useState(null);
   const [focus, setFocus] = useState({ open: false, running: false, mode: "work", left: WORK_SECS, rounds: 0, taskId: null });
 
@@ -722,8 +776,8 @@ export default function Organizer() {
       id: uid(),
       title: p.title || raw,
       notes: "",
-      date: p.date ?? (view === "hoje" ? anchor : null),
-      time: p.time,
+      date: p.date ?? target.date,
+      time: p.time ?? (p.date ? null : target.time),
       duration: p.duration,
       priority: p.priority,
       listId: listId ?? filterList ?? null,
@@ -737,6 +791,8 @@ export default function Organizer() {
     };
     setTasks((prev) => [...prev, task]);
     setInput("");
+    // Continua pronto para a próxima: foco e alvo permanecem como estavam.
+    inputRef.current?.focus();
   }
 
   function toggleTask(task, dateKey) {
@@ -941,6 +997,29 @@ export default function Organizer() {
     onDropTime: (key, time) => moveTask(key, time),
   };
 
+  // Mira o dia em foco: na vista Dia, o dia aberto; na Semana, hoje quando ele
+  // está na semana visível, senão o começo dela. Escolher no seletor prevalece.
+  const pinnedRef = useRef(false);
+  useEffect(() => {
+    if (pinnedRef.current) return;
+    const t = todayKey();
+    const auto =
+      view === "hoje" || view === "dia" ? anchor
+      : view === "semana" ? (days.includes(t) ? t : days[0])
+      : t;
+    setTarget((cur) => (cur.date === auto && !cur.time ? cur : { date: auto, time: null }));
+  }, [view, anchor, days]);
+
+  function aimAt(date, time = null) {
+    pinnedRef.current = true;
+    setTarget({ date, time });
+    const el = inputRef.current;
+    if (el) {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      el.focus();
+    }
+  }
+
   const anchorDate = fromKey(anchor);
   const headTitle =
     view === "semana" ? labelRange(days) :
@@ -1081,13 +1160,14 @@ export default function Organizer() {
           </header>
 
           <Composer inputRef={inputRef} value={input} onChange={setInput} onSubmit={addTask}
-            preview={preview} lists={lists} />
+            preview={preview} lists={lists} weekDays={days}
+            target={target} onTarget={(t) => { pinnedRef.current = true; setTarget(t); }} />
 
           <div className="content">
             {view === "semana" && (
               <div className="weekwrap">
                 <WeekView days={days} tasks={visibleTasks} lists={lists} showDone={prefs.showDone}
-                  theme={theme} drag={dragCtx} {...handlers} />
+                  theme={theme} drag={dragCtx} target={target} onAim={aimAt} {...handlers} />
                 <div className={`unscheduled${prefs.showBacklog === false ? " closed" : ""}${dragOver === "backlog" ? " over" : ""}`}
                   onDragOver={(e) => { e.preventDefault(); setDragOver("backlog"); }}
                   onDragLeave={() => dragOver === "backlog" && setDragOver(null)}
@@ -1116,7 +1196,7 @@ export default function Organizer() {
 
             {(view === "hoje" || view === "dia") && (
               <DayView dayKey={anchor} tasks={visibleTasks} lists={lists} showDone={prefs.showDone}
-                theme={theme} drag={dragCtx} {...handlers} />
+                theme={theme} drag={dragCtx} onAim={aimAt} {...handlers} />
             )}
 
             {(view === "proximos" || view === "tudo" || view === "concluidas") && (

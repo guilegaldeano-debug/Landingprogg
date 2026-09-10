@@ -138,6 +138,15 @@ button{cursor:pointer;border:none;background:none;padding:0}
   font-weight:500;padding:6px 14px;white-space:nowrap;transition:opacity .12s}
 .addbtn:hover:not(:disabled){opacity:.86}
 .addbtn:disabled{background:var(--fill);color:var(--label3);cursor:default}
+/* alvo: em que dia a tarefa entra quando a frase nao diz */
+.target{display:flex;align-items:center;gap:5px;position:relative;flex:0 0 auto;
+  background:var(--fill-soft);border-radius:8px;padding:5px 10px;font-size:12.5px;
+  color:var(--label);cursor:pointer;white-space:nowrap;transition:background .12s}
+.target:hover{background:var(--fill)}
+.target .at{color:var(--label2);font-variant-numeric:tabular-nums}
+.target.fromtext{color:var(--accent);background:var(--accent-tint);cursor:default}
+.target select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;
+  font-size:16px}
 .readout{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 11px 27px;font-size:12.5px;color:var(--label2)}
 .readout b{font-weight:500;color:var(--label)}
 .readout .sep{color:var(--label3)}
@@ -162,7 +171,25 @@ button{cursor:pointer;border:none;background:none;padding:0}
 .daycol.today .dn{background:var(--accent-fill);color:var(--on-accent)}
 .daycol.today .dw{color:var(--accent);font-weight:500}
 .dayhead .hrs{margin-left:auto;font-size:11.5px;color:var(--label3);font-variant-numeric:tabular-nums}
-.daycol .none{font-size:12.5px;color:var(--label3);padding:4px;opacity:.6}
+.addhere{margin-left:6px;width:20px;height:20px;border-radius:6px;color:var(--label3);
+  display:flex;align-items:center;justify-content:center;opacity:0;
+  transition:opacity .12s,background .12s,color .12s}
+.dayhead .hrs+.addhere{margin-left:4px}
+.dayhead .addhere:only-of-type{margin-left:auto}
+.daycol:hover .addhere,.addhere:focus-visible{opacity:1}
+@media (hover:none){.addhere{opacity:1}.none .invite{opacity:1}}
+.addhere:hover{background:var(--fill);color:var(--accent)}
+.daycol.aimed{background:var(--accent-tint)}
+.daycol.aimed .addhere{opacity:1;color:var(--accent)}
+.daycol .none{font-size:12.5px;color:var(--label3);padding:5px 4px;opacity:.65;
+  text-align:left;width:100%;border-radius:7px;transition:background .1s,color .1s}
+.daycol .none.free:hover{background:var(--fill-soft);color:var(--label);opacity:1}
+/* o convite só aparece quando o ponteiro chega na coluna */
+.none .invite{opacity:0;transition:opacity .12s}
+.daycol:hover .none .invite,.none.free:focus-visible .invite{opacity:1}
+/* o resto da coluna continua clicavel para adicionar naquele dia */
+.restofday{flex:1;min-height:26px;border-radius:8px;transition:background .1s}
+.restofday:hover{background:var(--fill-soft)}
 
 /* ============ compromisso (tem hora) x tarefa (nao tem) ============ */
 .item{display:flex;align-items:flex-start;gap:7px;border-radius:8px;padding:6px 7px;cursor:grab;
@@ -209,13 +236,15 @@ button{cursor:pointer;border:none;background:none;padding:0}
 /* ============ dia ============ */
 .dayview{border-top:1px solid var(--hairline)}
 .alldaystrip{padding:10px 0;border-bottom:1px solid var(--hairline);display:flex;flex-direction:column;gap:3px}
-.alldaystrip .lab{font-size:12px;color:var(--label3);padding:0 4px 4px}
+.alldaystrip .lab{font-size:12px;color:var(--label3);padding:0 4px 4px;display:flex;align-items:center}
+.alldaystrip .lab .addhere{opacity:1}
+.dayview:hover .addhere{opacity:1}
 .timeline{display:grid;grid-template-columns:62px 1fr}
 .trow{border-bottom:1px solid var(--hairline);min-height:48px;position:relative}
 .trow.h{color:var(--label3);font-size:12px;padding:6px 12px 0 0;text-align:right;
   font-variant-numeric:tabular-nums;border-bottom-color:transparent}
 .trow.s{padding:4px 6px;display:flex;flex-direction:column;gap:3px;transition:background .1s}
-.trow.s:hover{background:var(--fill-soft)}
+.trow.s:hover{background:var(--fill-soft);cursor:copy}
 .trow.s.over{background:var(--accent-tint)}
 .nowline{position:absolute;left:0;right:0;height:1.5px;background:var(--red);z-index:3;pointer-events:none}
 .nowline::before{content:"";position:absolute;left:-3.5px;top:-3px;width:8px;height:8px;
@@ -306,6 +335,9 @@ textarea.field{resize:vertical;min-height:70px;line-height:1.5}
   .navitem{width:auto;white-space:nowrap}
   .weekwrap{flex-direction:column}
   .weekgrid{grid-template-columns:repeat(7,minmax(146px,1fr));overflow-x:auto}
+  /* Sem ponteiro nao existe hover: o que convida a adicionar fica sempre visivel. */
+  .addhere{opacity:1}
+  .none .invite{opacity:1}
   .unscheduled,.unscheduled.closed{flex:none;width:100%;border-left:none;
     box-shadow:inset 0 1px 0 var(--hairline)}
   .toolbar{padding:16px 16px 12px}
@@ -326,5 +358,7 @@ textarea.field{resize:vertical;min-height:70px;line-height:1.5}
   .searchbox{width:100%;order:9;flex:1 1 100%}
   .composer .row{flex-wrap:wrap}
   .composer input{min-width:150px}
+  .target{order:2}
+  .composer .addbtn{order:3;margin-left:auto}
 }
 `;
