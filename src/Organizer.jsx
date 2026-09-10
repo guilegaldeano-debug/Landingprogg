@@ -8,6 +8,7 @@ import { parseInput, describeRepeat, norm } from "./organizer/parse.js";
 import { occursOn, isDone, sortTasks, tasksForDay } from "./organizer/recurrence.js";
 import { CSS } from "./organizer/styles.js";
 import { Icon } from "./organizer/icons.jsx";
+import * as sync from "./organizer/sync.js";
 
 /* ------------------------------------------------------------------ */
 /* Persistencia                                                        */
@@ -562,6 +563,76 @@ export default function Organizer() {
   const undoRef = useRef(null);
   const fileRef = useRef(null);
 
+  // ----- sincronizacao entre dispositivos (só quando publicado como Artifact) -----
+  const [synced, setSynced] = useState(false);
+  const dbRef = useRef(null);
+  const pushedRef = useRef(new Map());   // id -> updatedAt já gravado
+  const applyingRef = useRef(false);     // evita eco: snapshot -> estado -> escrita
+
+  useEffect(() => {
+    let dead = false;
+    let stopTasks = null;
+    let stopLists = null;
+
+    (async () => {
+      const db = await sync.open();
+      if (!db || dead) return;
+      dbRef.current = db;
+      setSynced(true);
+
+      stopTasks = db.collection("tasks").onSnapshot(
+        (snap) => {
+          const remote = snap.docs.map((d) => d.data()).filter((d) => d && d.id);
+          applyingRef.current = true;
+          setTasks((local) => {
+            const next = sync.merge(local, remote, new Set(pushedRef.current.keys()));
+            for (const t of remote) pushedRef.current.set(t.id, t.updatedAt ?? 0);
+            return next;
+          });
+          queueMicrotask(() => { applyingRef.current = false; });
+        },
+        () => setSynced(false)
+      );
+
+      stopLists = db.doc("meta/lists").onSnapshot((d) => {
+        const items = d.data()?.items;
+        if (Array.isArray(items) && items.length) {
+          applyingRef.current = true;
+          setLists(items);
+          queueMicrotask(() => { applyingRef.current = false; });
+        }
+      });
+    })();
+
+    return () => { dead = true; stopTasks?.(); stopLists?.(); };
+  }, []);
+
+  // Sobe o que mudou aqui. Só roda quando a mudança nasceu neste aparelho.
+  useEffect(() => {
+    const db = dbRef.current;
+    if (!db || applyingRef.current) return;
+
+    for (const t of tasks) {
+      if (pushedRef.current.get(t.id) === (t.updatedAt ?? 0)) continue;
+      const body = sync.forStorage(t);
+      pushedRef.current.set(t.id, body.updatedAt);
+      db.collection("tasks").doc(t.id).set(body).catch(() => {});
+    }
+
+    const alive = new Set(tasks.map((t) => t.id));
+    for (const id of [...pushedRef.current.keys()]) {
+      if (alive.has(id)) continue;
+      pushedRef.current.delete(id);
+      db.collection("tasks").doc(id).delete().catch(() => {});
+    }
+  }, [tasks]);
+
+  useEffect(() => {
+    const db = dbRef.current;
+    if (!db || applyingRef.current) return;
+    db.doc("meta/lists").set({ items: lists }).catch(() => {});
+  }, [lists]);
+
   useEffect(() => save(LS_TASKS, tasks), [tasks]);
   useEffect(() => save(LS_LISTS, lists), [lists]);
   useEffect(() => save(LS_PREFS, { ...prefs, view }), [prefs, view]);
@@ -662,6 +733,7 @@ export default function Organizer() {
       doneDates: [],
       skipDates: [],
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
     setTasks((prev) => [...prev, task]);
     setInput("");
@@ -674,23 +746,23 @@ export default function Organizer() {
         if (t.repeat) {
           const set = new Set(t.doneDates ?? []);
           set.has(dateKey) ? set.delete(dateKey) : set.add(dateKey);
-          return { ...t, doneDates: [...set] };
+          return sync.touch({ ...t, doneDates: [...set] });
         }
-        return { ...t, done: !t.done, doneAt: !t.done ? todayKey() : null };
+        return sync.touch({ ...t, done: !t.done, doneAt: !t.done ? todayKey() : null });
       })
     );
   }
 
   function saveTask(draft) {
     const { _dateKey, ...clean } = draft;
-    setTasks((prev) => prev.map((t) => (t.id === clean.id ? { ...t, ...clean } : t)));
+    setTasks((prev) => prev.map((t) => (t.id === clean.id ? sync.touch({ ...t, ...clean }) : t)));
     setEditing(null);
   }
 
   // Remove uma unica ocorrencia de uma serie, sem mexer na regra.
   function skipOccurrence(task, dateKey) {
     setTasks((prev) =>
-      prev.map((t) => (t.id === task.id ? { ...t, skipDates: [...new Set([...(t.skipDates ?? []), dateKey])] } : t))
+      prev.map((t) => (t.id === task.id ? sync.touch({ ...t, skipDates: [...new Set([...(t.skipDates ?? []), dateKey])] }) : t))
     );
     setEditing(null);
     setToast(`"${task.title}" pulada em ${labelDate(dateKey)}`);
@@ -720,7 +792,7 @@ export default function Organizer() {
     if (!dragId) return;
     const moved = tasks.find((t) => t.id === dragId);
     setTasks((prev) =>
-      prev.map((t) => (t.id === dragId ? { ...t, date: dateKey, ...(time ? { time } : {}) } : t))
+      prev.map((t) => (t.id === dragId ? sync.touch({ ...t, date: dateKey, ...(time ? { time } : {}) }) : t))
     );
     if (moved?.repeat && dateKey) {
       setToast(`"${moved.title}" é recorrente — a série inteira passou a começar em ${labelDate(dateKey)}`);
@@ -738,16 +810,13 @@ export default function Organizer() {
     ]);
   }
 
-  function exportJSON() {
-    const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), tasks, lists }, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `agenda-${todayKey()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function exportJSON() {
+    const text = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), tasks, lists }, null, 2);
+    try {
+      await sync.saveFile(`semana-${todayKey()}.json`, text);
+    } catch (err) {
+      setToast("Não foi possível salvar o arquivo.");
+    }
   }
 
   function importJSON(file) {
@@ -968,7 +1037,11 @@ export default function Organizer() {
             </div>
             <input ref={fileRef} type="file" accept="application/json" style={{ display: "none" }}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) importJSON(f); e.target.value = ""; }} />
-            <p className="disclaimer">Dados só neste navegador.<br />Lembretes só com a aba aberta.</p>
+            <p className="disclaimer">
+              {synced
+                ? <><b style={{ color: "var(--accent)", fontWeight: 500 }}>Sincronizado</b><br />PC e celular veem o mesmo.</>
+                : <>Dados só neste navegador.<br />Sem sincronização.</>}
+            </p>
           </div>
         </aside>
 

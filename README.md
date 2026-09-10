@@ -64,13 +64,42 @@ A tarefa guarda a **regra**, não cópias. Por isso:
 - **arrastar** uma tarefa recorrente reancora a série inteira (o app avisa);
 - **Excluir série** apaga tudo.
 
+## Sincronização entre dispositivos
+
+O app roda de dois jeitos, e detecta sozinho em qual está:
+
+| Onde | Armazenamento | Sincroniza? |
+|---|---|---|
+| Publicado como Artifact | banco do Artifact, na conta de quem abre | **Sim**, PC e celular |
+| Netlify, `npm run dev`, arquivo local | `localStorage` | Não |
+
+Sem servidor próprio e sem mensalidade. Cada tarefa é um documento em
+`tasks/<id>`; as listas ficam em `meta/lists`. Conflito resolve por
+`updatedAt` — quem editou por último vence. Para uma pessoa alternando entre
+dois aparelhos isso basta; não há edição simultânea de verdade.
+
+A camada inteira está em `src/organizer/sync.js` e degrada sozinha: fora do
+Artifact não existe `window.claude`, `open()` devolve `null` e o app segue em
+`localStorage` sem nenhuma diferença de comportamento.
+
+### Publicar uma nova versão
+
+```bash
+npm run build:artifact     # gera dist-artifact/semana.artifact.html
+```
+
+Depois publique esse arquivo como Artifact declarando
+`capabilities: {db: {}, downloads: true}`. Republicar no mesmo endereço
+preserva os dados.
+
 ## Limitações conhecidas (de propósito, não são bugs)
 
-- **Dados só neste navegador** (`localStorage`). Não sincroniza entre PC e
-  celular. Use *Exportar JSON* / *Importar JSON* pra levar de um pro outro.
 - **Lembretes só com a aba aberta.** A Notification API do navegador não
   dispara com a aba fechada. Push de verdade exigiria backend + service
   worker + app nativo.
+- **Sincronizar exige estar logado na conta Claude** nos dois aparelhos. Se
+  isso incomodar, a alternativa é trocar `sync.js` por Supabase ou Firebase —
+  ambos têm plano gratuito folgado pra um app de uma pessoa.
 - Sem colaboração, sem anexos, sem subtarefas.
 
 ## Estrutura
